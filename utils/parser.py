@@ -265,7 +265,11 @@ def format_lesson(lesson_info: List[str], times: List[str], time_counter: int) -
         location_number = int(lesson_info[-2])
         location = f'📍 Каб. {lesson_info[-2]}'
     except ValueError:
-        location = f'📍 {lesson_info[-2]}'
+        location_ = lesson_info[-2]
+        if location_ == '':
+            location = '💻 Дистанционный формат'
+        else:
+            location = f'📍 {location_}'
 
     duration = f'🗓 {lesson_info[-1].replace("[", "").replace("]", "").replace("-", " - ")}'
     time = f'⏰ {times[time_counter]}'
