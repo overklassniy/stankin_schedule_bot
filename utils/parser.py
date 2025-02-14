@@ -277,7 +277,7 @@ def format_lesson(lesson_info: List[str], times: List[str], time_counter: int) -
         subgroup = None
 
     args = [name, teacher_fullname, lesson_type, subgroup, location, duration, time]
-    return f'<blockquote>{chr(10).join(arg for arg in args if arg)}</blockquote>'
+    return f'<blockquote>{chr(10).join(arg.capitalize() for arg in args if arg)}</blockquote>'
 
 
 def create_message(today_schedule: List[Union[str, List[str]]], increment_day: int = 0, scheduled: bool = True) -> str:
