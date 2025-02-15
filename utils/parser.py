@@ -280,7 +280,7 @@ def format_lesson(lesson_info: List[str], times: List[str], time_counter: int) -
     else:
         subgroup = None
 
-    lesson_type = lesson_type.capitalize()
+    lesson_type = lesson_type[:3] + lesson_type[3].upper() + lesson_type[4:]
 
     args = [name, teacher_fullname, lesson_type, subgroup, location, duration, time]
     return f'<blockquote>{chr(10).join(arg for arg in args if arg)}</blockquote>'
