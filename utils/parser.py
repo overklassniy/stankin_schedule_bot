@@ -14,10 +14,10 @@ def fix_labs(df: pd.DataFrame) -> pd.DataFrame:
     """
     Исправляет формат лабораторных в таблице, объединяя строки, которые должны быть объединены.
 
-    Args:
+    Аргументы:
         df (pd.DataFrame): Исходный DataFrame с данными.
 
-    Returns:
+    Возвращает:
         pd.DataFrame: DataFrame с исправленными лабораторными.
     """
     # Создаём копию DataFrame, чтобы не изменять оригинал
@@ -50,10 +50,10 @@ def parse_pdf(file_path: str) -> dict:
     """
     Парсит PDF-файл с расписанием, возвращая структурированные данные.
 
-    Args:
+    Аргументы:
         file_path (str): Путь к PDF-файлу.
 
-    Returns:
+    Возвращает:
         dict: Структурированные данные расписания, где ключи - это дни недели, а значения - списки занятий.
     """
     # Извлечение таблиц из PDF файла, обработка всех страниц
@@ -97,11 +97,11 @@ def parse_date_range(date_range: str, increment_day: int = 0) -> list:
     """
     Парсит строку с датами и возвращает список валидных дат.
 
-    Args:
+    Аргументы:
         date_range (str): Строка с датами.
         increment_day (int, optional): Число дней для смещения даты (по умолчанию 0).
 
-    Returns:
+    Возвращает:
         list: Список валидных дат.
     """
     today = datetime.today() + timedelta(increment_day)
@@ -112,12 +112,12 @@ def parse_date_range(date_range: str, increment_day: int = 0) -> list:
         """
         Проверяет, находится ли текущая дата в пределах периода.
 
-        Args:
+        Аргументы:
             start (str): Начальная дата в формате 'дд.мм'.
             end (str): Конечная дата в формате 'дд.мм'.
             after_week (bool): Флаг для двухнедельных периодов (чётная/нечётная недели).
 
-        Returns:
+        Возвращает:
             bool: True, если текущая дата попадает в период.
         """
         start_day, start_month = map(int, start.split('.'))
@@ -162,11 +162,11 @@ def get_today_schedule(schedule: dict, increment_day: int = 0) -> list:
     """
     Возвращает расписание на день.
 
-    Args:
+    Аргументы:
         schedule (dict): Расписание всех дней.
         increment_day (int, optional): Число дней для смещения даты (по умолчанию 0).
 
-    Returns:
+    Возвращает:
         list: Список занятий на текущий день.
     """
     today = (datetime.today() + timedelta(increment_day)).strftime('%A')
@@ -219,10 +219,10 @@ def get_teachers_name(initials: str) -> str:
     """
     Возвращает полное имя преподавателя по его инициалам.
 
-    Args:
+    Аргументы:
         initials (str): Инициалы преподавателя (например, 'Иванов И.И.').
 
-    Returns:
+    Возвращает:
         str: Полное имя преподавателя, если оно найдено в файле, или сами инициалы, если запись не найдена или файл отсутствует.
     """
     try:
@@ -243,12 +243,12 @@ def format_lesson(lesson_info: List[str], times: List[str], time_counter: int) -
     """
     Форматирует информацию о паре в блок для сообщения.
 
-    Args:
+    Аргументы:
         lesson_info (List[str]): Список строк с деталями о паре.
         times (List[str]): Список временных интервалов пар.
         time_counter (int): Индекс текущего временного интервала.
 
-    Returns:
+    Возвращает:
         str: Отформатированная информация о паре.
     """
     name = '📚 ' + lesson_info[0]
@@ -290,12 +290,12 @@ def create_message(today_schedule: List[Union[str, List[str]]], increment_day: i
     """
     Формирует сообщение с расписанием на день.
 
-    Args:
+    Аргументы:
         today_schedule (List[Union[str, List[str]]]): Расписание на день.
         increment_day (int, optional): Смещение даты (по умолчанию 0).
         scheduled (bool, optional): Флаг, указывающий на тип формирования сообщения (по умолчанию True).
 
-    Returns:
+    Возвращает:
         str: Готовое сообщение с расписанием.
     """
     date_ = datetime.today() + timedelta(increment_day)

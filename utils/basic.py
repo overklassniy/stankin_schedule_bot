@@ -6,11 +6,12 @@ from datetime import datetime
 from typing import Union
 
 
+# Подгрузка конфигураций из config.json
 def load_config() -> dict:
     """
     Загружает конфигурационные данные из файла config.json.
 
-    Returns:
+    Возвращает:
         dict: Словарь с конфигурационными данными.
     """
     with open('config.json', 'r', encoding='UTF-8') as config_file:
@@ -25,26 +26,36 @@ def setup_logger() -> logging.Logger:
     """
     Настраивает логирование для вывода в файл и консоль.
 
-    Returns:
+    Возвращает:
         logging.Logger: Объект логгера для записи логов.
     """
-    os.makedirs(config['LOGS_DIR'], exist_ok=True)
-    current_time = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-    log_file_name = f"{config['LOGS_DIR']}/{current_time}.log"
+    logger_obj = logging.getLogger()
+    # Если обработчики уже добавлены, не настраиваем логгер заново
+    if not logger_obj.handlers:
+        os.makedirs(config['LOGS_DIR'], exist_ok=True)
+        current_time = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        log_file_name = f"{config['LOGS_DIR']}/{current_time}.log"
+        logger_obj.setLevel(logging.INFO)
 
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
+        # Логирование в файл с явным указанием кодировки UTF-8
+        file_handler = logging.FileHandler(log_file_name, encoding="utf-8")
 
-    file_handler = logging.FileHandler(log_file_name)
-    console_handler = logging.StreamHandler()
+        # Логирование в консоль с поддержкой UTF-8
+        console_handler = logging.StreamHandler()
+        console_handler.stream.reconfigure(encoding="utf-8")
 
-    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-    file_handler.setFormatter(formatter)
-    console_handler.setFormatter(formatter)
+        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+        file_handler.setFormatter(formatter)
+        console_handler.setFormatter(formatter)
 
-    logger.addHandler(file_handler)
-    logger.addHandler(console_handler)
-    return logger
+        logger_obj.addHandler(file_handler)
+        logger_obj.addHandler(console_handler)
+
+        logger_obj.info("Логгер успешно настроен. Логи записываются в файл: %s", log_file_name)
+    else:
+        logger_obj.info("Логгер уже настроен ранее.")
+
+    return logger_obj
 
 
 logger = setup_logger()
@@ -55,11 +66,11 @@ def load_json_file(file_path: str, default_value: Union[dict, list]) -> Union[di
     """
     Загружает данные из JSON файла. Если файл не существует, возвращает значение по умолчанию.
 
-    Args:
+    Аргументы:
         file_path (str): Путь к JSON файлу.
         default_value (dict | list): Значение по умолчанию, если файл не найден.
 
-    Returns:
+    Возвращает:
         dict | list: Данные, загруженные из JSON файла, или значение по умолчанию.
     """
     if os.path.exists(file_path):
@@ -72,7 +83,7 @@ def save_json_file(file_path: str, data: Union[dict, list]) -> None:
     """
     Сохраняет данные в JSON файл.
 
-    Args:
+    Аргументы:
         file_path (str): Путь к JSON файлу.
         data (dict | list): Данные для сохранения.
     """
@@ -95,13 +106,13 @@ def days_until_date(date_str: str) -> int:
     Если дата указывается в формате 'день.месяц', используется текущий год.
     Если указанная дата уже прошла в текущем году, возвращается количество дней до этой даты в следующем году.
 
-    Args:
+    Аргументы:
         date_str (str): Дата в строковом формате 'день.месяц.год' или 'день.месяц'.
 
-    Returns:
+    Возвращает:
         int: Количество дней до указанной даты.
 
-    Raises:
+    Вызывает:
         ValueError: Если строка даты не соответствует ожидаемому формату 'день.месяц' или 'день.месяц.год'.
     """
     # Получаем текущую дату
