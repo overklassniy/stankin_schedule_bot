@@ -2,14 +2,7 @@ from aiogram import Bot, types, F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import (
-    InlineKeyboardMarkup,
-    InlineKeyboardButton,
-    CallbackQuery,
-    ReplyKeyboardMarkup,
-    KeyboardButton,
-    ReplyKeyboardRemove,
-)
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 
 from db.models import resolve_group, get_group_by_id, get_group_by_chat, update_group_settings, is_admin
 from services.scheduler import get_schedule_pdf_path
@@ -47,25 +40,6 @@ async def can_manage_settings(bot: Bot, user_id: int, chat_id: int, chat_type: s
         return False
 
 
-def _settings_reply_keyboard() -> ReplyKeyboardMarkup:
-    """
-    Возвращает reply-клавиатуру меню настроек (Группа, Время, Картинки, Завтра, Проверить загрузку, Закрыть меню).
-
-    Returns:
-        ReplyKeyboardMarkup с resize_keyboard и placeholder.
-    """
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="Группа"), KeyboardButton(text="Время")],
-            [KeyboardButton(text="Картинки"), KeyboardButton(text="Завтра")],
-            [KeyboardButton(text="Проверить загрузку")],
-            [KeyboardButton(text="Закрыть меню")],
-        ],
-        resize_keyboard=True,
-        input_field_placeholder="Выберите настройку",
-    )
-
-
 class SettingsStates(StatesGroup):
     wait_time = State()
     wait_group_code = State()
@@ -99,7 +73,7 @@ def _settings_inline_keyboard(group: dict) -> InlineKeyboardMarkup:
 @router.message(Command("settings"))
 async def handle_settings_command(message: types.Message, state: FSMContext, bot: Bot) -> None:
     """
-    Команда /settings: открывает меню настроек группы (reply + inline с текущими значениями).
+    Команда /settings: открывает настройки группы (сообщение с inline-кнопками под ним).
     Доступ только при can_manage_settings; группа должна быть привязана (resolve_group).
     """
     await state.clear()
@@ -112,18 +86,9 @@ async def handle_settings_command(message: types.Message, state: FSMContext, bot
         await message.answer("Сначала добавьте бота в группу – настройки работают только в привязанных группах.")
         return
     await message.answer(
-        f"⚙️ Настройки группы «{group['name']}»\n\nВыберите пункт на клавиатуре или кнопкой ниже:",
-        reply_markup=_settings_reply_keyboard(),
+        f"⚙️ Настройки группы «{group['name']}»\n\nВыберите пункт кнопкой ниже:",
+        reply_markup=_settings_inline_keyboard(group),
     )
-    await message.answer("Текущие значения:", reply_markup=_settings_inline_keyboard(group))
-
-
-# Закрыть меню
-@router.message(F.text == "Закрыть меню")
-async def settings_close_menu(message: types.Message, state: FSMContext, bot: Bot) -> None:
-    """Убирает reply-клавиатуру и сбрасывает FSM состояние."""
-    await state.clear()
-    await message.answer("Меню закрыто.", reply_markup=ReplyKeyboardRemove())
 
 
 # /settopic
@@ -205,73 +170,6 @@ async def settings_receive_group_code(message: types.Message, state: FSMContext)
     group = await get_group_by_id(gid)
     if group:
         await message.answer("Текущие настройки:", reply_markup=_settings_inline_keyboard(group))
-
-
-# Reply-клавиатура: обработка нажатий
-@router.message(F.text == "Группа")
-@router.message(F.text == "Время")
-@router.message(F.text == "Картинки")
-@router.message(F.text == "Завтра")
-@router.message(F.text == "Проверить загрузку")
-async def settings_menu_text(message: types.Message, state: FSMContext, bot: Bot) -> None:
-    """
-    Обработка нажатий reply-кнопок настроек: Группа (FSM wait_group_code), Время (wait_time),
-    Картинки/Завтра (переключение и обновление клавиатуры), Проверить загрузку (get_schedule_pdf_path + парс).
-    """
-    if not await can_manage_settings(bot, message.from_user.id, message.chat.id, message.chat.type):
-        return
-    thread_id = getattr(message, "message_thread_id", None)
-    group = await resolve_group(message.chat.id, thread_id)
-    if not group:
-        await message.answer("Группа не привязана. Добавьте бота в группу.")
-        return
-    text = message.text or ""
-    if text == "Группа":
-        current = group.get("schedule_source_value") or "не задана"
-        await state.set_state(SettingsStates.wait_group_code)
-        await state.update_data(settings_group_id=group["id"])
-        await message.answer(f"Сейчас: {current}\nВведите код группы, например: ИДБ-24-10")
-    elif text == "Время":
-        await state.set_state(SettingsStates.wait_time)
-        await state.update_data(settings_group_id=group["id"])
-        h = group.get("send_hour", 0)
-        m = group.get("send_minute", 0) or 0
-        await message.answer(f"Сейчас: {h}:{m:02d}\nВведите новое время в формате ЧЧ:ММ, например 07:30.")
-    elif text == "Картинки":
-        new_val = not group.get("enable_image")
-        await update_group_settings(group["id"], enable_image=new_val)
-        g = await get_group_by_id(group["id"])
-        if g:
-            status = "включены" if new_val else "выключены"
-            await message.answer(f"Картинки в расписании: {status}.", reply_markup=_settings_inline_keyboard(g))
-    elif text == "Завтра":
-        new_val = not group.get("enable_tomorrow_button")
-        await update_group_settings(group["id"], enable_tomorrow_button=new_val)
-        g = await get_group_by_id(group["id"])
-        if g:
-            status = "включена" if new_val else "выключена"
-            await message.answer(f"Кнопка «Завтра»: {status}.", reply_markup=_settings_inline_keyboard(g))
-    elif text == "Проверить загрузку":
-        group_code = (group.get("schedule_source_value") or "").strip()
-        if not group_code:
-            await message.answer("Сначала задайте код группы в настройках (кнопка «Группа»).")
-            return
-        await message.answer(f"Проверяю загрузку расписания для {group_code}…")
-        try:
-            pdf_path = await get_schedule_pdf_path(group)
-            if not pdf_path:
-                await message.answer(
-                    f"Расписание для «{group_code}» не найдено на Moodle.\n"
-                    "Проверьте правильность кода группы."
-                )
-                return
-            schedule = parse_pdf(pdf_path)
-            today = get_today_schedule(schedule)
-            pairs = len([x for x in today if x != "Окно"])
-            await message.answer(f"Всё в порядке. Расписание для {group_code} загружено, сегодня пар: {pairs}.")
-        except Exception:
-            logger.exception("Test load failed for group %s", group["id"])
-            await message.answer("При проверке произошла ошибка. Попробуйте позже.")
 
 
 # Inline-кнопки
