@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDEs / Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment & secrets
+.env
+.env.*
+
+# Logs & runtime files
+logs/
+*.log
+
+# Data & generated files
+data/*.pdf
+images/
+avatar.jpg
+bot.db
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker
+Dockerfile
+docker-compose.yml

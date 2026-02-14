@@ -7,54 +7,61 @@ import camelot
 import numpy as np
 import pandas as pd
 
-from utils.basic import config
+from config import TEACHERS_FULLNAMES_PATH
 
 
 def fix_labs(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Исправляет формат лабораторных в таблице, объединяя строки, которые должны быть объединены.
+    Объединяет строки таблицы расписания для корректного отображения лабораторных.
 
-    Аргументы:
-        df (pd.DataFrame): Исходный DataFrame с данными.
+    Алгоритм: копия DataFrame; пустые строки заменяются на NaN; для строк с пустой первой
+    ячейкой значения из остальных столбцов конкатенируются с предыдущей строкой (через \\n),
+    текущая строка обнуляется; строки, полностью NaN, удаляются; NaN обратно в пустую строку.
 
-    Возвращает:
-        pd.DataFrame: DataFrame с исправленными лабораторными.
+    Args:
+        df: Исходный DataFrame (таблица из PDF, например первая таблица camelot).
+
+    Returns:
+        Новый DataFrame с объединёнными лабораторными и без полностью пустых строк.
     """
-    # Создаём копию DataFrame, чтобы не изменять оригинал
     df_copy = df.copy()
-
-    # Заменяем пустые строки на NaN
     df_copy.replace('', np.nan, inplace=True)
 
-    # Итерируем по строкам DataFrame
     for i in range(1, len(df_copy)):
-        # Проверяем, что первая ячейка в текущей строке пуста
         if pd.isna(df_copy.iloc[i, 0]):
-            # Объединяем не пустые ячейки текущей строки с предыдущей строкой
             for j in range(1, len(df_copy.columns)):
                 if pd.notna(df_copy.iloc[i, j]):
-                    df_copy.iloc[i - 1, j] = df_copy.iloc[i - 1, j] + '\n' + df_copy.iloc[i, j]
-            # Заполняем текущую строку NaN
+                    prev_val = df_copy.iloc[i - 1, j]
+                    curr_val = df_copy.iloc[i, j]
+                    if pd.isna(prev_val):
+                        df_copy.iloc[i - 1, j] = str(curr_val)
+                    else:
+                        df_copy.iloc[i - 1, j] = str(prev_val) + '\n' + str(curr_val)
             df_copy.iloc[i] = np.nan
 
-    # Удаляем строки, которые стали полностью пустыми
     df_copy = df_copy.dropna(how='all')
-
-    # Заменяем оставшиеся NaN обратно на пустые строки
     df_copy.replace(np.nan, '', inplace=True)
-
     return df_copy
 
 
 def parse_pdf(file_path: str) -> dict:
     """
-    Парсит PDF-файл с расписанием, возвращая структурированные данные.
+    Парсит PDF с расписанием (camelot) в словарь по дням недели.
 
-    Аргументы:
-        file_path (str): Путь к PDF-файлу.
+    Алгоритм: извлечение всех таблиц camelot.read_pdf(pages='all'), взятие первой таблицы,
+    fix_labs; из строк 1:8 формируется плоский список ячеек; по ячейкам строится словарь:
+    ключ – день недели (Понедельник … Суббота), значение – список занятий (строки или списки
+    подзанятий с датами в квадратных скобках).
 
-    Возвращает:
-        dict: Структурированные данные расписания, где ключи - это дни недели, а значения - списки занятий.
+    Args:
+        file_path: Путь к PDF-файлу на диске.
+
+    Returns:
+        Словарь: ключи – названия дней недели (рус.), значения – списки элементов расписания
+        (строка или список строк с датами в конце).
+
+    Raises:
+        FileNotFoundError, IOError при ошибках чтения; исключения camelot при невалидном PDF.
     """
     # Извлечение таблиц из PDF файла, обработка всех страниц
     tables = camelot.read_pdf(file_path, pages='all')
@@ -95,14 +102,18 @@ def parse_pdf(file_path: str) -> dict:
 
 def parse_date_range(date_range: str, increment_day: int = 0) -> list:
     """
-    Парсит строку с датами и возвращает список валидных дат.
+    Проверяет, попадает ли «текущая» дата (сегодня + increment_day) в указанные периоды.
 
-    Аргументы:
-        date_range (str): Строка с датами.
-        increment_day (int, optional): Число дней для смещения даты (по умолчанию 0).
+    Алгоритм: date_range разбивается по ", "; для частей с "-" обрабатываются периоды
+    (поддержка "к.н." и "ч.н." для двухнедельных); для точечных дат "дд.мм" проверяется
+    совпадение с днём/месяцем. Возвращается список подходящих подстрок периода/даты.
 
-    Возвращает:
-        list: Список валидных дат.
+    Args:
+        date_range: Строка с периодами и датами, например "01.09-30.12 к.н.", "15.10".
+        increment_day: Смещение от текущей даты в днях (0 = сегодня).
+
+    Returns:
+        Список строк (подстрок из date_range), в которые попадает целевая дата; может быть пустым.
     """
     today = datetime.today() + timedelta(increment_day)
     today = today.replace(hour=0, minute=0, second=0, microsecond=0)  # Обнуляем часы, минуты, секунды и микросекунды
@@ -110,15 +121,16 @@ def parse_date_range(date_range: str, increment_day: int = 0) -> list:
 
     def is_within_period(start: str, end: str, after_week: bool = False) -> bool:
         """
-        Проверяет, находится ли текущая дата в пределах периода.
+        Проверяет, входит ли today в отрезок [start, end] (формат дд.мм).
+        Если after_week=True, дополнительно проверяется чётность недели (каждые 14 дней от start).
 
-        Аргументы:
-            start (str): Начальная дата в формате 'дд.мм'.
-            end (str): Конечная дата в формате 'дд.мм'.
-            after_week (bool): Флаг для двухнедельных периодов (чётная/нечётная недели).
+        Args:
+            start: Начало периода "дд.мм".
+            end: Конец периода "дд.мм" (если end < start, год конца +1).
+            after_week: Учёт двухнедельной сетки от start.
 
-        Возвращает:
-            bool: True, если текущая дата попадает в период.
+        Returns:
+            True, если дата в периоде (и при after_week на нужной неделе).
         """
         start_day, start_month = map(int, start.split('.'))
         end_day, end_month = map(int, end.split('.'))
@@ -160,14 +172,19 @@ def parse_date_range(date_range: str, increment_day: int = 0) -> list:
 
 def get_today_schedule(schedule: dict, increment_day: int = 0) -> list:
     """
-    Возвращает расписание на день.
+    Извлекает расписание на один день (сегодня + increment_day) с учётом дат в ячейках.
 
-    Аргументы:
-        schedule (dict): Расписание всех дней.
-        increment_day (int, optional): Число дней для смещения даты (по умолчанию 0).
+    Алгоритм: определение дня недели по целевой дате; взятие из schedule списка занятий
+    для этого дня; для каждого занятия из последней строки извлекается дата/период и
+    проверяется через parse_date_range – если дата не подходит, в список подставляется
+    "Окно"; для списков подзанятий (лабы по подгруппам) обрабатывается каждый элемент.
 
-    Возвращает:
-        list: Список занятий на текущий день.
+    Args:
+        schedule: Словарь расписания (результат parse_pdf): день недели -> список занятий.
+        increment_day: Смещение в днях от текущей даты (0 = сегодня, 1 = завтра).
+
+    Returns:
+        Список занятий на день: строки с \\n или списки строк; "Окно" для пропусков.
     """
     today = (datetime.today() + timedelta(increment_day)).strftime('%A')
     day_map = {
@@ -217,17 +234,20 @@ def get_today_schedule(schedule: dict, increment_day: int = 0) -> list:
 
 def get_teachers_name(initials: str) -> str:
     """
-    Возвращает полное имя преподавателя по его инициалам.
+    Возвращает полное имя преподавателя по инициалам из JSON-словаря.
 
-    Аргументы:
-        initials (str): Инициалы преподавателя (например, 'Иванов И.И.').
+    Загружает TEACHERS_FULLNAMES_PATH (JSON), ищет ключ initials. При KeyError или
+    FileNotFoundError возвращает исходные initials.
 
-    Возвращает:
-        str: Полное имя преподавателя, если оно найдено в файле, или сами инициалы, если запись не найдена или файл отсутствует.
+    Args:
+        initials: Инициалы, например "Иванов И.И." (точка в конце допустима).
+
+    Returns:
+        Полное имя из файла или initials при отсутствии записи/файла.
     """
     try:
         # Загружаем словарь с полными именами преподавателей из файла
-        with open(config['TEACHERS_FULLNAMES_PATH'], 'r', encoding='utf-8') as file:
+        with open(TEACHERS_FULLNAMES_PATH, 'r', encoding='utf-8') as file:
             teachers_names = json.load(file)
 
         # Ищем полное имя по инициалам
@@ -241,25 +261,39 @@ def get_teachers_name(initials: str) -> str:
 
 def format_lesson(lesson_info: List[str], times: List[str], time_counter: int) -> str:
     """
-    Форматирует информацию о паре в блок для сообщения.
+    Форматирует одну пару (название, тип/преподаватель, кабинет, даты) в HTML blockquote.
 
-    Аргументы:
-        lesson_info (List[str]): Список строк с деталями о паре.
-        times (List[str]): Список временных интервалов пар.
-        time_counter (int): Индекс текущего временного интервала.
+    Алгоритм: lesson_info – строки, полученные split('\\n') из ячейки расписания (название,
+    тип/преподаватель, вид, кабинет, период); определение типа (лекция/семинар/лаб) или
+    подстановка полного имени преподавателя из get_teachers_name; для лаб – учёт подгруппы
+    и сдвоенного времени; сборка строк с эмодзи и обёртка в <blockquote>.
 
-    Возвращает:
-        str: Отформатированная информация о паре.
+    Args:
+        lesson_info: Список строк полей пары (минимум: название, тип, кабинет, период).
+        times: Список временных интервалов пар по порядку.
+        time_counter: Индекс интервала для этой пары (0..len(times)-1).
+
+    Returns:
+        Строка HTML (blockquote) с названием, преподавателем, типом, кабинетом, датами, временем.
     """
     name = '📚 ' + lesson_info[0]
-    if lesson_info[1] not in ['лекции', 'семинар', 'лабораторные занятия']:
+
+    TYPE_MAP = {
+        "лекция": "Лекция",
+        "семинар": "Семинар",
+        "лабораторная": "Лабораторная работа",
+        "лабораторные занятия": "Лабораторная работа"
+    }
+
+    raw_type = lesson_info[1].lower()
+
+    if raw_type not in TYPE_MAP:
         teacher_initials = f'{lesson_info[1]}.'
         teacher_fullname = f'👤 {get_teachers_name(teacher_initials)}'
         lesson_type = f'⚙️ {lesson_info[2]}'
     else:
         teacher_fullname = None
-        lesson_type = '⚙️ ' + lesson_info[1]
-    lesson_type = lesson_type.replace('лекции', 'лекция')
+        lesson_type = '⚙️ ' + TYPE_MAP[raw_type]
 
     try:
         location_number = int(lesson_info[-2])
@@ -274,7 +308,7 @@ def format_lesson(lesson_info: List[str], times: List[str], time_counter: int) -
     duration = f'🗓 {lesson_info[-1].replace("[", "").replace("]", "").replace("-", " - ")}'
     time = f'⏰ {times[time_counter]}'
 
-    if 'лабораторные занятия' in lesson_type:
+    if 'лабораторные занятия' in lesson_type.lower() or 'лабораторная' in lesson_info[2].lower():
         subgroup = f'🗂 Группа: {lesson_info[-3].replace(")", "").replace("(", "")}'
         time = f'⏰ {times[time_counter].split(" - ")[0]} - {times[time_counter + 1].split(" - ")[-1]}'
     else:
@@ -288,15 +322,22 @@ def format_lesson(lesson_info: List[str], times: List[str], time_counter: int) -
 
 def create_message(today_schedule: List[Union[str, List[str]]], increment_day: int = 0, scheduled: bool = True) -> str:
     """
-    Формирует сообщение с расписанием на день.
+    Собирает итоговое HTML-сообщение с расписанием на один день.
 
-    Аргументы:
-        today_schedule (List[Union[str, List[str]]]): Расписание на день.
-        increment_day (int, optional): Смещение даты (по умолчанию 0).
-        scheduled (bool, optional): Флаг, указывающий на тип формирования сообщения (по умолчанию True).
+    Алгоритм: дата = сегодня + increment_day; воскресенье -> "Выходной"; иначе заголовок
+    (утренний при scheduled, иначе "Расписание на … (дата)"); обход today_schedule с
+    увеличением time_counter на "Окно" и на каждое занятие; каждое занятие форматируется
+    через format_lesson; при пустом списке занятий – случайное сообщение "без пар" или
+    "пар нет" в зависимости от scheduled.
 
-    Возвращает:
-        str: Готовое сообщение с расписанием.
+    Args:
+        today_schedule: Список занятий на день (результат get_today_schedule): строки или
+            списки строк, "Окно" для пропусков.
+        increment_day: Смещение даты в днях (0 = сегодня).
+        scheduled: True для утренней рассылки ("Доброе утро…"), False для ответа на команду.
+
+    Returns:
+        Строка "Выходной" или HTML-текст сообщения с расписанием.
     """
     date_ = datetime.today() + timedelta(increment_day)
     today = date_.strftime('%A')

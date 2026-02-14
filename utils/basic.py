@@ -1,48 +1,43 @@
-# Подгрузка конфигураций из config.json
+# Базовые утилиты и логирование
 import json
 import logging
 import os
 from datetime import datetime
 from typing import Union
 
-
-# Подгрузка конфигураций из config.json
-def load_config() -> dict:
-    """
-    Загружает конфигурационные данные из файла config.json.
-
-    Возвращает:
-        dict: Словарь с конфигурационными данными.
-    """
-    with open('config.json', 'r', encoding='UTF-8') as config_file:
-        return json.load(config_file)
-
-
-config = load_config()
+# Статическая конфигурация из config.py (в корне проекта)
+try:
+    from config import LOGS_DIR
+except ImportError:
+    LOGS_DIR = "logs"
 
 
 # Настройка логирования
 def setup_logger() -> logging.Logger:
     """
-    Настраивает логирование для вывода в файл и консоль.
+    Настраивает корневой логгер: файл в LOGS_DIR (с именем по текущей дате/времени) и консоль.
 
-    Возвращает:
-        logging.Logger: Объект логгера для записи логов.
+    Алгоритм: если у корневого логгера ещё нет handlers – создаётся директория LOGS_DIR,
+    добавляются FileHandler (UTF-8) и StreamHandler с форматом времени/уровня/сообщения;
+    при повторном вызове handlers уже есть – только пишется сообщение в лог.
+
+    Returns:
+        logging.Logger: корневой логгер с уровнем INFO.
+
+    Raises:
+        OSError при невозможности создать директорию или файл лога.
     """
     logger_obj = logging.getLogger()
-    # Если обработчики уже добавлены, не настраиваем логгер заново
     if not logger_obj.handlers:
-        os.makedirs(config['LOGS_DIR'], exist_ok=True)
+        os.makedirs(LOGS_DIR, exist_ok=True)
         current_time = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        log_file_name = f"{config['LOGS_DIR']}/{current_time}.log"
+        log_file_name = f"{LOGS_DIR}/{current_time}.log"
         logger_obj.setLevel(logging.INFO)
 
-        # Логирование в файл с явным указанием кодировки UTF-8
         file_handler = logging.FileHandler(log_file_name, encoding="utf-8")
-
-        # Логирование в консоль с поддержкой UTF-8
         console_handler = logging.StreamHandler()
-        console_handler.stream.reconfigure(encoding="utf-8")
+        if hasattr(console_handler.stream, "reconfigure"):
+            console_handler.stream.reconfigure(encoding="utf-8")
 
         formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
         file_handler.setFormatter(formatter)
@@ -61,77 +56,71 @@ def setup_logger() -> logging.Logger:
 logger = setup_logger()
 
 
-# Функции для работы с файлами JSON
 def load_json_file(file_path: str, default_value: Union[dict, list]) -> Union[dict, list]:
     """
-    Загружает данные из JSON файла. Если файл не существует, возвращает значение по умолчанию.
+    Загружает JSON из файла; при отсутствии файла возвращает default_value.
 
-    Аргументы:
-        file_path (str): Путь к JSON файлу.
-        default_value (dict | list): Значение по умолчанию, если файл не найден.
+    Args:
+        file_path: Путь к .json файлу.
+        default_value: Значение, возвращаемое, если файл не существует.
 
-    Возвращает:
-        dict | list: Данные, загруженные из JSON файла, или значение по умолчанию.
+    Returns:
+        Распарсенный dict или list из файла либо default_value.
+
+    Raises:
+        json.JSONDecodeError при невалидном JSON в файле.
     """
     if os.path.exists(file_path):
-        with open(file_path, 'r') as f:
+        with open(file_path, 'r', encoding='utf-8') as f:
             return json.load(f)
     return default_value
 
 
 def save_json_file(file_path: str, data: Union[dict, list]) -> None:
     """
-    Сохраняет данные в JSON файл.
+    Сохраняет dict или list в JSON-файл (ensure_ascii=False, с созданием директории при необходимости).
 
-    Аргументы:
-        file_path (str): Путь к JSON файлу.
-        data (dict | list): Данные для сохранения.
+    Args:
+        file_path: Путь к целевому файлу.
+        data: Объект для сериализации (dict или list).
+
+    Returns:
+        None.
+
+    Raises:
+        OSError при ошибке создания директории или записи; TypeError при неподдерживаемом типе в data.
     """
-    # Получаем директорию из пути к файлу
     directory = os.path.dirname(file_path)
-
-    # Проверяем, существует ли директория, и создаем её, если нет
     if not os.path.exists(directory):
         os.makedirs(directory)
-
-    # Сохраняем данные в JSON файл
-    with open(file_path, 'w') as f:
-        json.dump(data, f)
+    with open(file_path, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False)
 
 
 def days_until_date(date_str: str) -> int:
     """
-    Вычисляет количество дней до указанной даты в формате 'день.месяц.год' или 'день.месяц'.
+    Вычисляет количество дней от сегодня до указанной даты.
 
-    Если дата указывается в формате 'день.месяц', используется текущий год.
-    Если указанная дата уже прошла в текущем году, возвращается количество дней до этой даты в следующем году.
+    Алгоритм: парсинг date_str как "дд.мм.гггг" или "дд.мм" (год – текущий);
+    если дата в прошлом, год сдвигается на следующий; возврат разницы в днях.
 
-    Аргументы:
-        date_str (str): Дата в строковом формате 'день.месяц.год' или 'день.месяц'.
+    Args:
+        date_str: Дата в формате "дд.мм.гггг" или "дд.мм".
 
-    Возвращает:
-        int: Количество дней до указанной даты.
+    Returns:
+        Неотрицательное число дней до даты.
 
-    Вызывает:
-        ValueError: Если строка даты не соответствует ожидаемому формату 'день.месяц' или 'день.месяц.год'.
+    Raises:
+        ValueError при неверном формате строки.
     """
-    # Получаем текущую дату
     today = datetime.now().date()
-
-    # Парсим входную строку. Если год не указан, используем текущий год.
     try:
-        # Если строка имеет формат 'день.месяц.год'
         parsed_date = datetime.strptime(date_str, "%d.%m.%Y").date()
     except ValueError:
-        # Если строка имеет формат 'день.месяц', добавляем текущий год
         current_year = today.year
         parsed_date = datetime.strptime(f"{date_str}.{current_year}", "%d.%m.%Y").date()
 
-    # Если дата уже прошла в этом году, добавляем год
     if parsed_date < today:
         parsed_date = parsed_date.replace(year=today.year + 1)
 
-    # Вычисляем количество дней до этой даты
-    days_left = (parsed_date - today).days
-
-    return days_left
+    return (parsed_date - today).days
