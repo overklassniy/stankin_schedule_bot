@@ -301,16 +301,19 @@ def format_lesson(lesson_info: List[str], times: List[str], time_counter: int) -
     except ValueError:
         location_ = lesson_info[-2]
         if location_ == '':
-            location = '💻 Дистанционный формат'
+            location = '💻 Онлайн'
         else:
             location = f'📍 {location_}'
 
     duration = f'🗓 {lesson_info[-1].replace("[", "").replace("]", "").replace("-", " - ")}'
-    time = f'⏰ {times[time_counter]}'
+    # Защита от выхода за границы: в расписании может быть больше слотов, чем в times
+    time_idx = min(time_counter, len(times) - 1)
+    time = f'⏰ {times[time_idx]}'
 
     if 'лабораторные занятия' in lesson_type.lower() or 'лабораторная' in lesson_info[2].lower():
         subgroup = f'🗂 Группа: {lesson_info[-3].replace(")", "").replace("(", "")}'
-        time = f'⏰ {times[time_counter].split(" - ")[0]} - {times[time_counter + 1].split(" - ")[-1]}'
+        time_end_idx = min(time_counter + 1, len(times) - 1)
+        time = f'⏰ {times[time_idx].split(" - ")[0]} - {times[time_end_idx].split(" - ")[-1]}'
     else:
         subgroup = None
 

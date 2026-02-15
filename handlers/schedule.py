@@ -53,7 +53,12 @@ async def handle_schedule_command(message: types.Message) -> None:
     except Exception as e:
         await message.answer(text=f"Ошибка загрузки расписания: {e}")
         return
-    message_text = create_message(today_schedule, increment_day, scheduled=False)
+    try:
+        message_text = create_message(today_schedule, increment_day, scheduled=False)
+    except Exception:
+        logger.exception("create_message failed for schedule command")
+        await message.answer(text="Не удалось сформировать расписание.")
+        return
     if message_text == "Выходной":
         message_text = f"<b>{date} - Воскресенье. Занятий нет!</b>"
     await message.answer(text=message_text, parse_mode=ParseMode.HTML)
@@ -91,7 +96,12 @@ async def handle_tomorrow_command(message: types.Message) -> None:
     except Exception as e:
         await message.answer(text=f"Ошибка загрузки расписания: {e}")
         return
-    message_text = create_message(today_schedule, increment_day, scheduled=False)
+    try:
+        message_text = create_message(today_schedule, increment_day, scheduled=False)
+    except Exception:
+        logger.exception("create_message failed for tomorrow command")
+        await message.answer(text="Не удалось сформировать расписание.")
+        return
     if message_text == "Выходной":
         message_text = f"<b>{date} - Воскресенье. Занятий нет!</b>"
     await message.answer(text=message_text, parse_mode=ParseMode.HTML)
