@@ -25,11 +25,13 @@ async def handle_schedule_command(message: types.Message) -> None:
     Args:
         message: Сообщение с командой (может содержать аргумент, например /s 1 или /s 25.12).
     """
+    logger.debug("schedule command from user_id=%s chat_id=%s text=%s", message.from_user.id, message.chat.id, message.text)
     thread_id = getattr(message, "message_thread_id", None)
+    logger.debug("resolve_group chat_id=%s thread_id=%s", message.chat.id, thread_id)
     group = await resolve_group(message.chat.id, thread_id)
     if not group:
+        logger.info("User %s tried /schedule in unattached chat %s", message.from_user.id, message.chat.id)
         await message.answer(text="Эту команду можно использовать только в привязанной к боту группе.")
-        logger.info(f"{message.from_user.id} tried to use {message.text} in {message.chat.id}")
         return
     args = message.text.split()
     try:
@@ -40,10 +42,13 @@ async def handle_schedule_command(message: types.Message) -> None:
             increment_day = int(args[-1])
     except Exception:
         increment_day = 0
+    logger.debug("schedule: increment_day=%s", increment_day)
 
     date = (datetime.today() + timedelta(increment_day)).strftime("%d.%m")
+    logger.debug("schedule: requesting PDF for group id=%s", group["id"])
     pdf_path = await get_schedule_pdf_path(group)
     if not pdf_path:
+        logger.warning("Schedule: no PDF for group (chat_id=%s)", message.chat.id)
         await message.answer(
             text="Источник расписания не задан или недоступен. Настройте в /settings (кнопка «Источник расписания»)."
         )
@@ -51,6 +56,7 @@ async def handle_schedule_command(message: types.Message) -> None:
     try:
         today_schedule = get_today_schedule(parse_pdf(pdf_path), increment_day)
     except Exception as e:
+        logger.exception("Schedule: parse failed for chat_id=%s: %s", message.chat.id, e)
         await message.answer(text=f"Ошибка загрузки расписания: {e}")
         return
     try:
@@ -60,9 +66,10 @@ async def handle_schedule_command(message: types.Message) -> None:
         await message.answer(text="Не удалось сформировать расписание.")
         return
     if message_text == "Выходной":
+        logger.debug("schedule: Sunday, sending holiday message")
         message_text = f"<b>{date} - Воскресенье. Занятий нет!</b>"
     await message.answer(text=message_text, parse_mode=ParseMode.HTML)
-    logger.info(f"Sent schedule for {date} to {message.from_user.id}")
+    logger.info("Sent schedule date=%s to user_id=%s chat_id=%s", date, message.from_user.id, message.chat.id)
 
 
 @router.message(Command("tomorrow", "t"))
@@ -76,17 +83,19 @@ async def handle_tomorrow_command(message: types.Message) -> None:
     Args:
         message: Сообщение с командой.
     """
+    logger.debug("tomorrow command from user_id=%s chat_id=%s", message.from_user.id, message.chat.id)
     thread_id = getattr(message, "message_thread_id", None)
     group = await resolve_group(message.chat.id, thread_id)
     if not group:
+        logger.info("User %s tried /tomorrow in unattached chat %s", message.from_user.id, message.chat.id)
         await message.answer(text="Эту команду можно использовать только в привязанной к боту группе.")
-        logger.info(f"{message.from_user.id} tried to use {message.text} in {message.chat.id}")
         return
 
     increment_day = 1
     date = (datetime.today() + timedelta(increment_day)).strftime("%d.%m")
     pdf_path = await get_schedule_pdf_path(group)
     if not pdf_path:
+        logger.warning("Tomorrow: no PDF for group (chat_id=%s)", message.chat.id)
         await message.answer(
             text="Источник расписания не задан или недоступен. Настройте в /settings."
         )
@@ -94,6 +103,7 @@ async def handle_tomorrow_command(message: types.Message) -> None:
     try:
         today_schedule = get_today_schedule(parse_pdf(pdf_path), increment_day)
     except Exception as e:
+        logger.exception("Tomorrow: parse failed for chat_id=%s: %s", message.chat.id, e)
         await message.answer(text=f"Ошибка загрузки расписания: {e}")
         return
     try:
@@ -103,9 +113,10 @@ async def handle_tomorrow_command(message: types.Message) -> None:
         await message.answer(text="Не удалось сформировать расписание.")
         return
     if message_text == "Выходной":
+        logger.debug("tomorrow: Sunday, sending holiday message")
         message_text = f"<b>{date} - Воскресенье. Занятий нет!</b>"
     await message.answer(text=message_text, parse_mode=ParseMode.HTML)
-    logger.info(f"Sent schedule for {date} to {message.from_user.id}")
+    logger.info("Sent tomorrow schedule date=%s to user_id=%s chat_id=%s", date, message.from_user.id, message.chat.id)
 
 
 @router.callback_query(F.data == "tomorrow")
@@ -119,8 +130,14 @@ async def handle_tomorrow_query(call: CallbackQuery) -> None:
     Args:
         call: CallbackQuery от нажатия кнопки.
     """
+    logger.debug("tomorrow callback from user_id=%s chat_id=%s", call.from_user.id, call.message.chat.id)
     thread_id = getattr(call.message, "message_thread_id", None)
     group = await resolve_group(call.message.chat.id, thread_id)
-    if group and group.get("enable_tomorrow_button"):
-        await handle_tomorrow_command(call.message)
-        logger.info(f"Sent schedule for {call.message.chat.id} to {call.message.from_user.id} via inline button")
+    if not group:
+        logger.debug("tomorrow callback: no group for chat_id=%s", call.message.chat.id)
+        return
+    if not group.get("enable_tomorrow_button"):
+        logger.debug("tomorrow callback: button disabled for group id=%s", group["id"])
+        return
+    await handle_tomorrow_command(call.message)
+    logger.info("Sent schedule via tomorrow button chat_id=%s user_id=%s", call.message.chat.id, call.message.from_user.id)

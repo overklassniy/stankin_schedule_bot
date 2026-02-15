@@ -30,6 +30,7 @@ async def handle_private_message(message: types.Message) -> None:
     Returns:
         None.
     """
+    logger.debug("Private message from user_id=%s chat_id=%s", message.from_user.id, message.chat.id)
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Исходный код на GitHub",
                               url="https://github.com/overklassniy/stankin_schedule_bot/")],

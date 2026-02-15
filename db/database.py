@@ -6,6 +6,7 @@ import os
 import aiosqlite
 
 from config import DATABASE_PATH
+from utils.basic import logger
 
 SCHEMA_GROUPS = """
                 CREATE TABLE IF NOT EXISTS groups
@@ -105,10 +106,14 @@ async def init_db() -> None:
     dirpath = os.path.dirname(DATABASE_PATH)
     if dirpath:
         os.makedirs(dirpath, exist_ok=True)
+    logger.debug("Initializing database at %s", DATABASE_PATH)
     async with aiosqlite.connect(DATABASE_PATH) as db:
         await db.execute(SCHEMA_GROUPS)
+        logger.debug("Database: table groups created/checked")
         await db.execute(SCHEMA_ADMINS)
+        logger.debug("Database: table admins created/checked")
         await db.commit()
+    logger.info("Database initialized: %s", DATABASE_PATH)
 
 
 def get_connection():

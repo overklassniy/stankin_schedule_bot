@@ -12,6 +12,7 @@ from urllib.parse import urljoin, unquote
 import aiohttp
 
 from config import MOODLE_BASE_URL, MOODLE_COURSE_ID
+from utils.basic import logger
 
 BASE = MOODLE_BASE_URL.rstrip("/")
 
@@ -29,10 +30,12 @@ async def _guest_login(session: aiohttp.ClientSession) -> None:
     Raises:
         aiohttp.ClientError при сетевых ошибках.
     """
+    logger.debug("Moodle: guest login to %s", BASE)
     async with session.get(f"{BASE}/login/index.php") as resp:
         html = await resp.text()
     token_m = re.search(r'name="logintoken"\s+value="([^"]+)"', html)
     logintoken = token_m.group(1) if token_m else ""
+    logger.debug("Moodle: logintoken found=%s", bool(token_m))
     payload = {
         "username": "guest",
         "password": "guest",
@@ -41,6 +44,7 @@ async def _guest_login(session: aiohttp.ClientSession) -> None:
     }
     async with session.post(f"{BASE}/login/index.php", data=payload, allow_redirects=True):
         pass  # cookies сохраняются в jar
+    logger.debug("Moodle: guest login OK")
 
 
 async def _get_guest_session() -> aiohttp.ClientSession:
@@ -86,6 +90,7 @@ def _find_folder_ids(html: str) -> List[Tuple[str, str]]:
         if not url.startswith("http"):
             url = urljoin(BASE + "/", url)
         results.append((url, m.group(2)))
+    logger.debug("_find_folder_ids: found %s folders", len(results))
     return results
 
 
@@ -123,6 +128,7 @@ def _find_pdf_links_in_html(html: str) -> List[Tuple[str, str]]:
         fn_encoded = parts[-1].split("?")[0] if parts else "schedule.pdf"
         fn = unquote(fn_encoded)
         results.append((url, fn))
+    logger.debug("_find_pdf_links_in_html: found %s PDF link(s)", len(results))
     return results
 
 
@@ -155,35 +161,45 @@ async def download_schedule_pdf(
         return None
     cid = course_id or MOODLE_COURSE_ID
     code_lower = group_code.strip().lower()
+    logger.debug("Moodle: downloading schedule PDF for group_code=%s course_id=%s", group_code, cid)
 
     session = await _get_guest_session()
     try:
         # Загрузка страницы курса
         async with session.get(f"{BASE}/course/view.php?id={cid}") as resp:
             if resp.status != 200:
+                logger.warning("Moodle: course page status=%s for course_id=%s", resp.status, cid)
                 return None
             course_html = await resp.text()
 
         # Все папки на странице курса
         folders = _find_folder_ids(course_html)
         if not folders:
+            logger.debug("Moodle: no folders on course page course_id=%s", cid)
             return None
 
         # Обходим папки, ищем нужный PDF
         for folder_url, _fid in folders:
+            logger.debug("Moodle: fetching folder id=%s", _fid)
             async with session.get(folder_url) as resp:
                 if resp.status != 200:
+                    logger.debug("Moodle: folder id=%s status=%s", _fid, resp.status)
                     continue
                 folder_html = await resp.text()
 
             pdf_links = _find_pdf_links_in_html(folder_html)
+            logger.debug("Moodle: folder id=%s has %s PDF link(s)", _fid, len(pdf_links))
             for pdf_url, pdf_filename in pdf_links:
                 # Сравниваем имя файла (без .pdf) с кодом группы
                 name_no_ext = pdf_filename.rsplit(".", 1)[0].lower()
                 if name_no_ext == code_lower:
                     # Нашли – скачиваем
-                    return await _download_pdf(session, pdf_url, pdf_filename, save_dir)
+                    path = await _download_pdf(session, pdf_url, pdf_filename, save_dir)
+                    if path:
+                        logger.info("Moodle: downloaded PDF for group_code=%s -> %s", group_code, path)
+                    return path
 
+        logger.debug("Moodle: PDF not found for group_code=%s in course_id=%s", group_code, cid)
         return None
     finally:
         await session.close()
@@ -210,11 +226,14 @@ async def _download_pdf(
     Returns:
         Абсолютный путь к сохранённому файлу или None при status != 200 или не-PDF содержимом.
     """
+    logger.debug("_download_pdf: GET url=%s", url[:80])
     async with session.get(url, allow_redirects=True) as resp:
         if resp.status != 200:
+            logger.debug("_download_pdf: status=%s", resp.status)
             return None
         data = await resp.read()
     if not data or data[:4] != b"%PDF":
+        logger.debug("_download_pdf: not a PDF or empty body len=%s", len(data) if data else 0)
         return None
     if not filename.lower().endswith(".pdf"):
         filename += ".pdf"
@@ -223,11 +242,13 @@ async def _download_pdf(
         path = os.path.join(save_dir, filename)
         with open(path, "wb") as f:
             f.write(data)
+        logger.debug("_download_pdf: saved to %s", path)
         return path
     fd, path = tempfile.mkstemp(suffix=".pdf")
     os.close(fd)
     with open(path, "wb") as f:
         f.write(data)
+    logger.debug("_download_pdf: saved to temp %s", path)
     return path
 
 

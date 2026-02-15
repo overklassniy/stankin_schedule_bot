@@ -20,6 +20,8 @@ from services.scheduler import run_daily_scheduler
 from utils.basic import logger
 
 TOKEN = os.getenv("BOT_TOKEN")
+if not TOKEN:
+    logger.warning("BOT_TOKEN not set in environment")
 dp = Dispatcher(storage=MemoryStorage())
 dp.include_router(handlers_router)
 
@@ -40,9 +42,14 @@ async def main() -> None:
         Исключения при отсутствии BOT_TOKEN, ошибках БД или сети.
     """
     global bot_id
+    logger.info("Starting bot...")
+    if not TOKEN:
+        logger.error("BOT_TOKEN is empty, cannot start")
+        return
     await init_db()
     for aid in ADMIN_IDS:
         await add_admin(aid)
+    logger.debug("Admins synced: %s", ADMIN_IDS)
 
     if PROXY:
         logger.info("Using proxy: %s", PROXY)
@@ -56,6 +63,7 @@ async def main() -> None:
 
     asyncio.create_task(run_daily_scheduler(bot))
 
+    logger.info("Starting long polling...")
     await dp.start_polling(bot, polling_timeout=30)
 
 

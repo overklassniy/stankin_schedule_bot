@@ -7,6 +7,7 @@ import aiosqlite
 
 from config import DATABASE_PATH, DEFAULT_SEND_HOUR, DEFAULT_SEND_MINUTE, DEFAULT_ENABLE_IMAGE, \
     DEFAULT_ENABLE_TOMORROW_BUTTON
+from utils.basic import logger
 
 
 def _row_to_group(row: tuple) -> dict:
@@ -52,7 +53,9 @@ async def get_group_by_id(group_id: int) -> Optional[dict]:
         async with db.execute("SELECT * FROM groups WHERE id = ?", (group_id,)) as cursor:
             row = await cursor.fetchone()
             if row:
+                logger.debug("get_group_by_id: found id=%s", group_id)
                 return _row_to_group(tuple(row))
+    logger.debug("get_group_by_id: not found id=%s", group_id)
     return None
 
 
@@ -70,8 +73,14 @@ async def resolve_group(chat_id: int, thread_id: Optional[int]) -> Optional[dict
     """
     group = await get_group_by_chat_and_thread(chat_id, thread_id)
     if group:
+        logger.debug("resolve_group: found by chat_id=%s thread_id=%s -> id=%s", chat_id, thread_id, group["id"])
         return group
-    return await get_group_by_chat(chat_id)
+    group = await get_group_by_chat(chat_id)
+    if group:
+        logger.debug("resolve_group: found by chat_id only -> id=%s", group["id"])
+    else:
+        logger.debug("resolve_group: not found chat_id=%s thread_id=%s", chat_id, thread_id)
+    return group
 
 
 async def get_group_by_chat(chat_id: int) -> Optional[dict]:
@@ -92,7 +101,9 @@ async def get_group_by_chat(chat_id: int) -> Optional[dict]:
         ) as cursor:
             row = await cursor.fetchone()
             if row:
+                logger.debug("get_group_by_chat: found chat_id=%s", chat_id)
                 return _row_to_group(tuple(row))
+    logger.debug("get_group_by_chat: not found chat_id=%s", chat_id)
     return None
 
 
@@ -122,7 +133,9 @@ async def get_group_by_chat_and_thread(chat_id: int, thread_id: Optional[int]) -
             ) as cursor:
                 row = await cursor.fetchone()
         if row:
+            logger.debug("get_group_by_chat_and_thread: found chat_id=%s thread_id=%s", chat_id, thread_id)
             return _row_to_group(tuple(row))
+    logger.debug("get_group_by_chat_and_thread: not found chat_id=%s thread_id=%s", chat_id, thread_id)
     return None
 
 
@@ -136,7 +149,9 @@ async def get_all_groups() -> List[dict]:
     async with aiosqlite.connect(DATABASE_PATH) as db:
         async with db.execute("SELECT * FROM groups ORDER BY id") as cursor:
             rows = await cursor.fetchall()
-            return [_row_to_group(tuple(r)) for r in rows]
+            result = [_row_to_group(tuple(r)) for r in rows]
+    logger.debug("get_all_groups: count=%s", len(result))
+    return result
 
 
 async def update_group_settings(
@@ -190,7 +205,9 @@ async def update_group_settings(
         updates.append("schedule_source_value = ?")
         args.append(schedule_source_value)
     if not updates:
+        logger.debug("update_group_settings: nothing to update group_id=%s", group_id)
         return
+    logger.debug("update_group_settings: group_id=%s fields=%s", group_id, updates)
     args.append(group_id)
     async with aiosqlite.connect(DATABASE_PATH) as db:
         await db.execute(
@@ -198,6 +215,7 @@ async def update_group_settings(
             args,
         )
         await db.commit()
+    logger.debug("update_group_settings: done group_id=%s", group_id)
 
 
 async def is_admin(user_id: int) -> bool:
@@ -216,7 +234,9 @@ async def is_admin(user_id: int) -> bool:
                 (user_id,),
         ) as cursor:
             row = await cursor.fetchone()
-            return row is not None
+            is_adm = row is not None
+    logger.debug("is_admin: user_id=%s -> %s", user_id, is_adm)
+    return is_adm
 
 
 async def add_admin(user_id: int) -> None:
@@ -235,6 +255,7 @@ async def add_admin(user_id: int) -> None:
             (user_id,),
         )
         await db.commit()
+    logger.debug("add_admin: user_id=%s", user_id)
 
 
 async def create_group(
@@ -279,7 +300,10 @@ async def create_group(
         await db.commit()
         cur = await db.execute("SELECT last_insert_rowid()")
         row_id = (await cur.fetchone())[0]
-    return await get_group_by_id(row_id)
+    result = await get_group_by_id(row_id)
+    if result:
+        logger.info("Created group id=%s chat_id=%s name=%s", row_id, chat_id, result.get("name"))
+    return result
 
 
 async def delete_groups_by_chat_id(chat_id: int) -> int:
@@ -296,4 +320,6 @@ async def delete_groups_by_chat_id(chat_id: int) -> int:
         cur = await db.execute("DELETE FROM groups WHERE chat_id = ?", (chat_id,))
         n = cur.rowcount if cur.rowcount >= 0 else 0
         await db.commit()
-        return n
+    if n:
+        logger.info("Deleted %s group(s) for chat_id=%s", n, chat_id)
+    return n

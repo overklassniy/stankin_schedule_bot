@@ -7,9 +7,18 @@ from typing import Union
 
 # Статическая конфигурация из config.py (в корне проекта)
 try:
-    from config import LOGS_DIR
+    from config import LOGS_DIR, LOG_LEVEL
 except ImportError:
     LOGS_DIR = "logs"
+    LOG_LEVEL = "INFO"
+
+_LEVEL_MAP = {
+    "DEBUG": logging.DEBUG,
+    "INFO": logging.INFO,
+    "WARNING": logging.WARNING,
+    "ERROR": logging.ERROR,
+    "CRITICAL": logging.CRITICAL,
+}
 
 
 # Настройка логирования
@@ -19,10 +28,10 @@ def setup_logger() -> logging.Logger:
 
     Алгоритм: если у корневого логгера ещё нет handlers – создаётся директория LOGS_DIR,
     добавляются FileHandler (UTF-8) и StreamHandler с форматом времени/уровня/сообщения;
-    при повторном вызове handlers уже есть – только пишется сообщение в лог.
+    уровень берётся из LOG_LEVEL (.env). При повторном вызове handlers уже есть – только пишется сообщение в лог.
 
     Returns:
-        logging.Logger: корневой логгер с уровнем INFO.
+        logging.Logger: корневой логгер.
 
     Raises:
         OSError при невозможности создать директорию или файл лога.
@@ -32,7 +41,8 @@ def setup_logger() -> logging.Logger:
         os.makedirs(LOGS_DIR, exist_ok=True)
         current_time = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
         log_file_name = f"{LOGS_DIR}/{current_time}.log"
-        logger_obj.setLevel(logging.INFO)
+        level = _LEVEL_MAP.get(LOG_LEVEL, logging.INFO)
+        logger_obj.setLevel(level)
 
         file_handler = logging.FileHandler(log_file_name, encoding="utf-8")
         console_handler = logging.StreamHandler()
@@ -46,7 +56,7 @@ def setup_logger() -> logging.Logger:
         logger_obj.addHandler(file_handler)
         logger_obj.addHandler(console_handler)
 
-        logger_obj.info("Логгер успешно настроен. Логи записываются в файл: %s", log_file_name)
+        logger_obj.info("Логгер настроен. Уровень: %s, файл: %s", LOG_LEVEL, log_file_name)
     else:
         logger_obj.info("Логгер уже настроен ранее.")
 
@@ -72,7 +82,10 @@ def load_json_file(file_path: str, default_value: Union[dict, list]) -> Union[di
     """
     if os.path.exists(file_path):
         with open(file_path, 'r', encoding='utf-8') as f:
-            return json.load(f)
+            data = json.load(f)
+        logger.debug("load_json_file: loaded %s keys/items", len(data) if isinstance(data, (dict, list)) else "?")
+        return data
+    logger.debug("load_json_file: not found %s, using default", file_path)
     return default_value
 
 
@@ -93,8 +106,10 @@ def save_json_file(file_path: str, data: Union[dict, list]) -> None:
     directory = os.path.dirname(file_path)
     if not os.path.exists(directory):
         os.makedirs(directory)
+        logger.debug("save_json_file: created dir %s", directory)
     with open(file_path, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False)
+    logger.debug("save_json_file: saved %s", file_path)
 
 
 def days_until_date(date_str: str) -> int:
@@ -123,4 +138,6 @@ def days_until_date(date_str: str) -> int:
     if parsed_date < today:
         parsed_date = parsed_date.replace(year=today.year + 1)
 
-    return (parsed_date - today).days
+    days = (parsed_date - today).days
+    logger.debug("days_until_date: date_str=%s -> %s days", date_str, days)
+    return days

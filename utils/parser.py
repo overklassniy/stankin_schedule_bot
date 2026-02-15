@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 
 from config import TEACHERS_FULLNAMES_PATH
+from utils.basic import logger
 
 
 def fix_labs(df: pd.DataFrame) -> pd.DataFrame:
@@ -63,6 +64,7 @@ def parse_pdf(file_path: str) -> dict:
     Raises:
         FileNotFoundError, IOError при ошибках чтения; исключения camelot при невалидном PDF.
     """
+    logger.debug("Parsing PDF: %s", file_path)
     # Извлечение таблиц из PDF файла, обработка всех страниц
     tables = camelot.read_pdf(file_path, pages='all')
 
@@ -97,6 +99,7 @@ def parse_pdf(file_path: str) -> dict:
                 item__ = item_.replace('] ', ']\n').strip()
             schedule[current_day].append(item__)
 
+    logger.debug("Parsed PDF: %s days", len(schedule))
     return schedule
 
 
@@ -198,6 +201,7 @@ def get_today_schedule(schedule: dict, increment_day: int = 0) -> list:
     }
 
     today_rus = day_map[today]
+    logger.debug("get_today_schedule: day=%s increment_day=%s", today_rus, increment_day)
 
     # Инициализация расписания на сегодняшний день как пустого
     today_schedule = []
@@ -229,6 +233,7 @@ def get_today_schedule(schedule: dict, increment_day: int = 0) -> list:
                 else:
                     today_schedule.append("Окно")  # Для сохранения структуры
 
+    logger.debug("get_today_schedule: lessons count=%s", len([x for x in today_schedule if x != "Окно"]))
     return today_schedule
 
 
@@ -252,9 +257,11 @@ def get_teachers_name(initials: str) -> str:
 
         # Ищем полное имя по инициалам
         full_name = teachers_names[initials]
+        logger.debug("get_teachers_name: found %s -> %s", initials, full_name[:30] + "..." if len(full_name) > 30 else full_name)
     except (KeyError, FileNotFoundError):
         # Возвращаем инициалы, если полное имя не найдено или файл отсутствует
         full_name = initials
+        logger.debug("get_teachers_name: not found or no file, using initials %s", initials)
 
     return full_name
 
@@ -344,6 +351,7 @@ def create_message(today_schedule: List[Union[str, List[str]]], increment_day: i
     """
     date_ = datetime.today() + timedelta(increment_day)
     today = date_.strftime('%A')
+    logger.debug("create_message: date=%s increment_day=%s scheduled=%s", date_.strftime("%d.%m.%Y"), increment_day, scheduled)
 
     if today == 'Sunday':
         return 'Выходной'
@@ -405,4 +413,5 @@ def create_message(today_schedule: List[Union[str, List[str]]], increment_day: i
     else:
         message += '\n'.join(lessons)
 
+    logger.debug("create_message: lessons=%s", len(lessons))
     return message

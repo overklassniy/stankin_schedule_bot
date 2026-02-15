@@ -6,6 +6,9 @@
 
 import os
 
+# Уровень логирования: DEBUG, INFO, WARNING, ERROR (из .env: LOG_LEVEL)
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+
 # Пути
 LOGS_DIR = os.getenv("LOGS_DIR", "logs")
 TEACHERS_FULLNAMES_PATH = os.getenv("TEACHERS_FULLNAMES_PATH", "data/teachers.json")
