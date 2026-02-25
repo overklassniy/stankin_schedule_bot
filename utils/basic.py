@@ -116,14 +116,15 @@ def days_until_date(date_str: str) -> int:
     """
     Вычисляет количество дней от сегодня до указанной даты.
 
-    Алгоритм: парсинг date_str как "дд.мм.гггг" или "дд.мм" (год – текущий);
-    если дата в прошлом, год сдвигается на следующий; возврат разницы в днях.
+    Алгоритм: парсинг date_str как "дд.мм.гггг" или "дд.мм".
+    Для формата без года используется текущий год, и возвращается разница в днях
+    (может быть отрицательной для прошедших дат).
 
     Args:
         date_str: Дата в формате "дд.мм.гггг" или "дд.мм".
 
     Returns:
-        Неотрицательное число дней до даты.
+        Число дней до даты (может быть отрицательным).
 
     Raises:
         ValueError при неверном формате строки.
@@ -134,9 +135,6 @@ def days_until_date(date_str: str) -> int:
     except ValueError:
         current_year = today.year
         parsed_date = datetime.strptime(f"{date_str}.{current_year}", "%d.%m.%Y").date()
-
-    if parsed_date < today:
-        parsed_date = parsed_date.replace(year=today.year + 1)
 
     days = (parsed_date - today).days
     logger.debug("days_until_date: date_str=%s -> %s days", date_str, days)
