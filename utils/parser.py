@@ -16,8 +16,10 @@ def fix_labs(df: pd.DataFrame) -> pd.DataFrame:
     Объединяет строки таблицы расписания для корректного отображения лабораторных.
 
     Алгоритм: копия DataFrame; пустые строки заменяются на NaN; для строк с пустой первой
-    ячейкой значения из остальных столбцов конкатенируются с предыдущей строкой (через \\n),
-    текущая строка обнуляется; строки, полностью NaN, удаляются; NaN обратно в пустую строку.
+    ячейкой значения из остальных столбцов конкатенируются с ближайшей непустой строкой выше
+    (через \\n), текущая строка обнуляется; строки, полностью NaN, удаляются; NaN обратно
+    в пустую строку. Поиск ближайшей непустой строки выше нужен, так как предыдущая строка
+    могла быть уже обнулена как продолжение другой.
 
     Args:
         df: Исходный DataFrame (таблица из PDF, например первая таблица camelot).
@@ -30,14 +32,22 @@ def fix_labs(df: pd.DataFrame) -> pd.DataFrame:
 
     for i in range(1, len(df_copy)):
         if pd.isna(df_copy.iloc[i, 0]):
+            # Ищем ближайшую непустую строку выше, так как предыдущая строка
+            # могла быть уже обнулена как продолжение другой
+            target = i - 1
+            while target >= 0 and pd.isna(df_copy.iloc[target, 0]):
+                target -= 1
+            if target < 0:
+                df_copy.iloc[i] = np.nan
+                continue
             for j in range(1, len(df_copy.columns)):
                 if pd.notna(df_copy.iloc[i, j]):
-                    prev_val = df_copy.iloc[i - 1, j]
+                    prev_val = df_copy.iloc[target, j]
                     curr_val = df_copy.iloc[i, j]
                     if pd.isna(prev_val):
-                        df_copy.iloc[i - 1, j] = str(curr_val)
+                        df_copy.iloc[target, j] = str(curr_val)
                     else:
-                        df_copy.iloc[i - 1, j] = str(prev_val) + '\n' + str(curr_val)
+                        df_copy.iloc[target, j] = str(prev_val) + '\n' + str(curr_val)
             df_copy.iloc[i] = np.nan
 
     df_copy = df_copy.dropna(how='all')
@@ -367,8 +377,8 @@ def create_message(today_schedule: List[Union[str, List[str]]], increment_day: i
         'Sunday': 'Воскресенье'
     }
 
-    times = ['8:30 - 10:10', '10:20 - 12:00', '12:20 - 14:00', '14:10 - 15:50',
-             '16:00 - 17:40', '18:00 - 19:30', '19:40 - 21:10', '21:20 - 22:50']
+    times = ['8:30 - 10:05', '10:15 - 11:50', '12:20 - 13:55', '14:05 - 15:40',
+             '15:50 - 17:25', '18:00 - 19:30', '19:40 - 21:10', '21:20 - 22:50']
 
     today_rus = day_map[today]
 
