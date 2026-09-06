@@ -4,7 +4,7 @@
 # Stage 2 (runtime): копирует только venv и код, без компиляторов и кеша pip.
 
 # Stage 1: сборка зависимостей в виртуальном окружении
-FROM python:3.13-slim AS builder
+FROM python:3.14-slim AS builder
 
 # Создаём изолированное venv, чтобы перенести только установленные пакеты в runtime
 RUN python -m venv /opt/venv
@@ -28,7 +28,7 @@ RUN pip install --no-cache-dir --no-compile --upgrade pip && \
 
 
 # Stage 2: минимальный runtime-образ
-FROM python:3.13-slim
+FROM python:3.14-slim
 
 WORKDIR /app
 
