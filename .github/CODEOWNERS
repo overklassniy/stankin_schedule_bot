@@ -1,0 +1,38 @@
+# CODEOWNERS для проекта «СТАНКИН Расписание»
+#
+# Формат: <шаблон пути> <владельцы через пробел>
+# GitHub автоматически запрашивает ревью у указанных владельцев
+# при изменении соответствующих файлов в pull request.
+
+# Точка входа и конфигурация
+/bot.py               @overklassniy
+/config.py            @overklassniy
+/.env.example         @overklassniy
+/requirements.txt     @overklassniy
+
+# Обработчики aiogram
+/handlers/            @overklassniy
+
+# Бизнес-логика и интеграции (Moodle, планировщик, кэш)
+/services/            @overklassniy
+
+# Работа с базой данных
+/db/                  @overklassniy
+
+# Утилиты (логирование, парсинг PDF)
+/utils/               @overklassniy
+
+# Документация
+/docs/                @overklassniy
+/README.md            @overklassniy
+/CONTRIBUTING.md      @overklassniy
+/SECURITY.md          @overklassniy
+/SUPPORT.md           @overklassniy
+
+# CI/CD и инфраструктура
+/.github/             @overklassniy
+/Dockerfile           @overklassniy
+/docker-compose.yml   @overklassniy
+
+# По умолчанию — все остальные файлы
+*                     @overklassniy

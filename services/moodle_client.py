@@ -5,10 +5,12 @@
 """
 import os
 import re
-import tempfile
 from typing import List, Optional, Tuple
 from urllib.parse import urljoin, unquote
 
+import aiofiles
+import aiofiles.os
+import aiofiles.tempfile
 import aiohttp
 
 from config import MOODLE_BASE_URL, MOODLE_COURSE_ID
@@ -212,10 +214,11 @@ async def _download_pdf(
         save_dir: Optional[str],
 ) -> Optional[str]:
     """
-    Скачивает файл по URL и сохраняет как PDF.
+    Асинхронно скачивает файл по URL и сохраняет как PDF через aiofiles.
 
     Алгоритм: GET url с редиректами; проверка, что тело начинается с %PDF;
-    при save_dir – запись в save_dir/filename, иначе создание временного файла через mkstemp.
+    при save_dir – запись в save_dir/filename, иначе создание временного файла
+    через aiofiles.tempfile.NamedTemporaryFile с delete=False (файл нужен camelot позже).
 
     Args:
         session: Открытая aiohttp-сессия.
@@ -238,16 +241,16 @@ async def _download_pdf(
     if not filename.lower().endswith(".pdf"):
         filename += ".pdf"
     if save_dir:
-        os.makedirs(save_dir, exist_ok=True)
+        await aiofiles.os.makedirs(save_dir, exist_ok=True)
         path = os.path.join(save_dir, filename)
-        with open(path, "wb") as f:
-            f.write(data)
+        async with aiofiles.open(path, "wb") as f:
+            await f.write(data)
         logger.debug("_download_pdf: saved to %s", path)
         return path
-    fd, path = tempfile.mkstemp(suffix=".pdf")
-    os.close(fd)
-    with open(path, "wb") as f:
-        f.write(data)
+    # delete=False: файл остаётся на диске для последующего чтения camelot
+    async with aiofiles.tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        await f.write(data)
+        path = f.name
     logger.debug("_download_pdf: saved to temp %s", path)
     return path
 

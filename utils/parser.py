@@ -11,6 +11,35 @@ from config import TEACHERS_FULLNAMES_PATH
 from utils.basic import logger
 
 
+# Кэш полных имён преподавателей: загружается один раз при импорте модуля.
+# Раньше JSON-файл открывался и парсился при каждом вызове get_teachers_name,
+# что приводило к многократному чтению файла при формировании одного сообщения.
+_TEACHERS_CACHE: dict = {}
+
+
+def _load_teachers_cache() -> None:
+    """
+    Загружает словарь полных имён преподавателей из JSON-файла в кэш.
+
+    При ошибке загрузки (отсутствие файла, невалидный JSON) кэш остаётся пустым,
+    и get_teachers_name будет возвращать исходные инициалы.
+    """
+    global _TEACHERS_CACHE
+    try:
+        with open(TEACHERS_FULLNAMES_PATH, 'r', encoding='utf-8') as file:
+            _TEACHERS_CACHE = json.load(file)
+        logger.debug("Teachers cache loaded: %s entries", len(_TEACHERS_CACHE))
+    except FileNotFoundError:
+        _TEACHERS_CACHE = {}
+        logger.debug("Teachers cache: file not found %s, using empty cache", TEACHERS_FULLNAMES_PATH)
+    except (json.JSONDecodeError, OSError) as e:
+        _TEACHERS_CACHE = {}
+        logger.warning("Teachers cache: failed to load %s: %s", TEACHERS_FULLNAMES_PATH, e)
+
+
+_load_teachers_cache()
+
+
 def fix_labs(df: pd.DataFrame) -> pd.DataFrame:
     """
     Объединяет строки таблицы расписания для корректного отображения лабораторных.
@@ -75,8 +104,8 @@ def parse_pdf(file_path: str) -> dict:
         FileNotFoundError, IOError при ошибках чтения; исключения camelot при невалидном PDF.
     """
     logger.debug("Parsing PDF: %s", file_path)
-    # Извлечение таблиц из PDF файла, обработка всех страниц
-    tables = camelot.read_pdf(file_path, pages='all')
+    # Извлечение таблиц из PDF файла, только первая страница (расписание всегда на ней)
+    tables = camelot.read_pdf(file_path, pages='1')
 
     # Выбор первой таблицы
     table = fix_labs(tables[0].df)
@@ -249,30 +278,22 @@ def get_today_schedule(schedule: dict, increment_day: int = 0) -> list:
 
 def get_teachers_name(initials: str) -> str:
     """
-    Возвращает полное имя преподавателя по инициалам из JSON-словаря.
+    Возвращает полное имя преподавателя по инициалам из кэша.
 
-    Загружает TEACHERS_FULLNAMES_PATH (JSON), ищет ключ initials. При KeyError или
-    FileNotFoundError возвращает исходные initials.
+    Кэш загружается один раз при импорте модуля. При отсутствии записи
+    возвращает исходные initials.
 
     Args:
         initials: Инициалы, например "Иванов И.И." (точка в конце допустима).
 
     Returns:
-        Полное имя из файла или initials при отсутствии записи/файла.
+        Полное имя из кэша или initials при отсутствии записи.
     """
-    try:
-        # Загружаем словарь с полными именами преподавателей из файла
-        with open(TEACHERS_FULLNAMES_PATH, 'r', encoding='utf-8') as file:
-            teachers_names = json.load(file)
-
-        # Ищем полное имя по инициалам
-        full_name = teachers_names[initials]
-        logger.debug("get_teachers_name: found %s -> %s", initials, full_name[:30] + "..." if len(full_name) > 30 else full_name)
-    except (KeyError, FileNotFoundError):
-        # Возвращаем инициалы, если полное имя не найдено или файл отсутствует
-        full_name = initials
-        logger.debug("get_teachers_name: not found or no file, using initials %s", initials)
-
+    full_name = _TEACHERS_CACHE.get(initials)
+    if full_name is None:
+        logger.debug("get_teachers_name: not found in cache, using initials %s", initials)
+        return initials
+    logger.debug("get_teachers_name: found %s -> %s", initials, full_name[:30] + "..." if len(full_name) > 30 else full_name)
     return full_name
 
 

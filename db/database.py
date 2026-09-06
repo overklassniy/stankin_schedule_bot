@@ -3,6 +3,7 @@
 """
 import os
 
+import aiofiles.os
 import aiosqlite
 
 from config import DATABASE_PATH
@@ -105,7 +106,7 @@ async def init_db() -> None:
     """
     dirpath = os.path.dirname(DATABASE_PATH)
     if dirpath:
-        os.makedirs(dirpath, exist_ok=True)
+        await aiofiles.os.makedirs(dirpath, exist_ok=True)
     logger.debug("Initializing database at %s", DATABASE_PATH)
     async with aiosqlite.connect(DATABASE_PATH) as db:
         await db.execute(SCHEMA_GROUPS)

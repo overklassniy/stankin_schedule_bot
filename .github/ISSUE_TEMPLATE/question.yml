@@ -1,0 +1,43 @@
+name: Вопрос по использованию
+description: Задать вопрос о работе бота, если не получилось найти ответ в документации
+title: "[Question] "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Перед вопросом проверьте документацию: [Установка](https://github.com/overklassniy/stankin_schedule_bot/blob/master/docs/installation.md),
+        [Конфигурация](https://github.com/overklassniy/stankin_schedule_bot/blob/master/docs/configuration.md),
+        [Использование](https://github.com/overklassniy/stankin_schedule_bot/blob/master/docs/usage.md).
+  - type: textarea
+    id: question
+    attributes:
+      label: Вопрос
+      description: Сформулируйте вопрос максимально конкретно.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Что уже пробовали
+      description: Какие шаги предприняли, что читали, что не помогло.
+    validations:
+      required: false
+  - type: input
+    id: group_code
+    attributes:
+      label: Код группы
+      placeholder: ИДБ-24-10
+    validations:
+      required: false
+  - type: dropdown
+    id: run_mode
+    attributes:
+      label: Способ запуска
+      options:
+        - Локально (python bot.py)
+        - Docker
+        - Другое
+        - Ещё не запускал
+    validations:
+      required: false

@@ -6,9 +6,9 @@ from aiogram.filters import Command
 from aiogram.types import CallbackQuery
 
 from db.models import resolve_group
-from services.scheduler import get_schedule_pdf_path
+from services.schedule_cache import get_cached_schedule
 from utils.basic import logger, days_until_date
-from utils.parser import parse_pdf, get_today_schedule, create_message
+from utils.parser import get_today_schedule, create_message
 
 router = Router()
 
@@ -45,16 +45,17 @@ async def handle_schedule_command(message: types.Message) -> None:
     logger.debug("schedule: increment_day=%s", increment_day)
 
     date = (datetime.today() + timedelta(increment_day)).strftime("%d.%m")
-    logger.debug("schedule: requesting PDF for group id=%s", group["id"])
-    pdf_path = await get_schedule_pdf_path(group)
-    if not pdf_path:
-        logger.warning("Schedule: no PDF for group (chat_id=%s)", message.chat.id)
+    group_code = (group.get("schedule_source_value") or "").strip()
+    logger.debug("schedule: requesting schedule for group id=%s code=%s", group["id"], group_code)
+    schedule = await get_cached_schedule(group_code)
+    if not schedule:
+        logger.warning("Schedule: no schedule for group (chat_id=%s)", message.chat.id)
         await message.answer(
             text="Источник расписания не задан или недоступен. Настройте в /settings (кнопка «Источник расписания»)."
         )
         return
     try:
-        today_schedule = get_today_schedule(parse_pdf(pdf_path), increment_day)
+        today_schedule = get_today_schedule(schedule, increment_day)
     except Exception as e:
         logger.exception("Schedule: parse failed for chat_id=%s: %s", message.chat.id, e)
         await message.answer(text=f"Ошибка загрузки расписания: {e}")
@@ -93,15 +94,16 @@ async def handle_tomorrow_command(message: types.Message) -> None:
 
     increment_day = 1
     date = (datetime.today() + timedelta(increment_day)).strftime("%d.%m")
-    pdf_path = await get_schedule_pdf_path(group)
-    if not pdf_path:
-        logger.warning("Tomorrow: no PDF for group (chat_id=%s)", message.chat.id)
+    group_code = (group.get("schedule_source_value") or "").strip()
+    schedule = await get_cached_schedule(group_code)
+    if not schedule:
+        logger.warning("Tomorrow: no schedule for group (chat_id=%s)", message.chat.id)
         await message.answer(
             text="Источник расписания не задан или недоступен. Настройте в /settings."
         )
         return
     try:
-        today_schedule = get_today_schedule(parse_pdf(pdf_path), increment_day)
+        today_schedule = get_today_schedule(schedule, increment_day)
     except Exception as e:
         logger.exception("Tomorrow: parse failed for chat_id=%s: %s", message.chat.id, e)
         await message.answer(text=f"Ошибка загрузки расписания: {e}")

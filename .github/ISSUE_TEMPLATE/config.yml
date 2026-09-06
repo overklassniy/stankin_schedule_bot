@@ -1,0 +1,16 @@
+# Конфигурация выбора шаблона issue
+#
+# Документация:
+# https://docs.github.com/communities/using-templates-to-encourage-useful-issues-and-pull-requests/configuring-issue-templates-for-your-repository
+
+# Запрещаем создание «пустых» issues без шаблона для пользователей без
+# прав на запись. Мейнтейнеры с правами Write+ всё ещё видят опцию.
+blank_issues_enabled: false
+
+contact_links:
+  - name: Сообщение об уязвимости
+    url: https://github.com/overklassniy/stankin_schedule_bot/security/policy
+    about: Уязвимости безопасности сообщайте приватно через SECURITY.md, не через issues.
+  - name: Документация
+    url: https://github.com/overklassniy/stankin_schedule_bot/tree/master/docs
+    about: Перед вопросом проверьте раздел docs — установка, конфигурация, использование, архитектура.

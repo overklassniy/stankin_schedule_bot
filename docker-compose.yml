@@ -1,0 +1,15 @@
+services:
+  stankin-schedule-bot:
+    image: ghcr.io/overklassniy/stankin_schedule_bot:dev
+    container_name: stankin-schedule-bot
+    restart: always
+    env_file: .env
+    environment:
+      - TZ=Europe/Moscow
+    working_dir: /app
+    volumes:
+      - ./data:/app/data
+      - ./images:/app/images
+      - ./logs:/app/logs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro

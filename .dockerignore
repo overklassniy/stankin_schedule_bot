@@ -1,0 +1,37 @@
+# Git и системные файлы
+.git
+.gitignore
+
+# Виртуальное окружение и кеш Python
+.venv
+__pycache__
+*.py[cod]
+
+# Секреты и окружение
+.env
+.env.*
+
+# Логи и runtime-данные (монтируются как volumes)
+logs
+data
+images
+avatar.jpg
+
+# IDE и инструменты
+.idea
+.devin
+
+# Документация
+*.md
+
+# Файлы сборки и деплоя (не нужны в образе)
+Dockerfile
+Dockerfile.*
+.dockerignore
+.dockerignore.*
+docker-compose*.yml
+*.remote
+.github
+
+# Тестовые файлы
+test_*.py

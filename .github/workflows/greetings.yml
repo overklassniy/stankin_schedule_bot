@@ -1,0 +1,31 @@
+name: Приветствие новых участников
+
+on:
+  issues:
+    types: [opened]
+  pull_request:
+    types: [opened]
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  greeting:
+    name: Приветствие первого обращения
+    runs-on: ubuntu-latest
+    steps:
+      - name: Комментарий для нового участника
+        uses: actions/first-interaction@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          issue-message: |
+            Спасибо за первый issue! Пока вы ждёте ответа, загляните в
+            [документацию](https://github.com/overklassniy/stankin_schedule_bot/tree/master/docs)
+            и [CONTRIBUTING.md](https://github.com/overklassniy/stankin_schedule_bot/blob/master/CONTRIBUTING.md).
+          pr-message: |
+            Спасибо за первый pull request! Пожалуйста, убедитесь, что:
+            - бот запускается локально (`python bot.py`);
+            - комментарии и docstring на русском языке;
+            - секреты, `.env` и файлы кэша не закоммичены.
+            Подробности — в [CONTRIBUTING.md](https://github.com/overklassniy/stankin_schedule_bot/blob/master/CONTRIBUTING.md).

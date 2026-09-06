@@ -1,42 +1,26 @@
 # Python
 __pycache__/
 *.py[cod]
-*.pyo
-*.pyd
-*.so
-*.egg-info/
-dist/
-build/
 
-# Virtual environments
+# Virtual environment
 .venv/
-venv/
-env/
 
-# IDEs / Editors
+# IDE
 .idea/
-.vscode/
-*.swp
-*.swo
 
 # Environment & secrets
 .env
 .env.*
+!.env.example
 
-# Logs & runtime files
+# Logs
 logs/
-*.log
 
-# Data & generated files
-data/*.pdf
+# Data
+data/
 images/
 avatar.jpg
-bot.db
 
-# OS files
+# OS
 .DS_Store
 Thumbs.db
-
-# Docker
-Dockerfile
-docker-compose.yml

@@ -5,9 +5,9 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 
 from db.models import resolve_group, get_group_by_id, get_group_by_chat, update_group_settings, is_admin
-from services.scheduler import get_schedule_pdf_path
+from services.schedule_cache import get_cached_schedule, invalidate_cache
 from utils.basic import logger
-from utils.parser import parse_pdf, get_today_schedule
+from utils.parser import get_today_schedule
 
 router = Router()
 
@@ -296,16 +296,17 @@ async def settings_callback_test_load(call: CallbackQuery) -> None:
         return
     logger.info("Test load started for group_code=%s by user_id=%s", group_code, call.from_user.id)
     await call.answer("Проверяю…")
+    # Инвалидируем кэш, чтобы принудительно скачать свежий PDF с Moodle
+    await invalidate_cache(group_code)
     try:
-        pdf_path = await get_schedule_pdf_path(group)
-        if not pdf_path:
-            logger.warning("Test load: PDF not found for group_code=%s", group_code)
+        schedule = await get_cached_schedule(group_code)
+        if not schedule:
+            logger.warning("Test load: schedule not found for group_code=%s", group_code)
             await call.message.answer(
                 f"Расписание для «{group_code}» не найдено на Moodle.\n"
                 "Проверьте правильность кода группы."
             )
             return
-        schedule = parse_pdf(pdf_path)
         today = get_today_schedule(schedule)
         pairs = len([x for x in today if x != "Окно"])
         logger.info("Test load OK for group_code=%s, pairs today=%s", group_code, pairs)

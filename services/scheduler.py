@@ -7,15 +7,16 @@ from datetime import datetime
 from random import choice
 from typing import Optional
 
+import aiofiles.os
 from aiogram import Bot
 from aiogram.enums import ParseMode
 from aiogram.types import FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton
 
 from config import IMAGES_DIR
 from db.models import get_all_groups
-from services.moodle_client import download_schedule_pdf
+from services.schedule_cache import get_cached_pdf_path, get_cached_schedule
 from utils.basic import logger
-from utils.parser import parse_pdf, get_today_schedule, create_message
+from utils.parser import get_today_schedule, create_message
 
 # Интервал проверки (секунды). Каждые 30с проверяем, не пора ли отправить.
 SCHEDULER_CHECK_INTERVAL = 30
@@ -26,16 +27,16 @@ _sent_today: set = set()
 
 async def get_schedule_pdf_path(group: dict = None) -> Optional[str]:
     """
-    Скачивает PDF расписания из Moodle для указанной группы.
+    Возвращает путь к PDF расписания группы из кэша.
 
-    Берёт код группы из group["schedule_source_value"], вызывает download_schedule_pdf.
-    Используется планировщиком и обработчиками «Проверить загрузку».
+    Берёт код группы из group["schedule_source_value"], делегирует в
+    schedule_cache.get_cached_pdf_path. PDF скачивается только при промахе кэша.
 
     Args:
         group: Словарь группы из БД (должен содержать schedule_source_value). Может быть None.
 
     Returns:
-        Путь к скачанному PDF-файлу или None, если группа не задана, код пустой или загрузка не удалась.
+        Путь к PDF-файлу в кэше или None, если группа не задана, код пустой или загрузка не удалась.
     """
     if not group:
         logger.debug("get_schedule_pdf_path: no group")
@@ -44,33 +45,9 @@ async def get_schedule_pdf_path(group: dict = None) -> Optional[str]:
     if not group_code:
         logger.debug("get_schedule_pdf_path: empty group_code for group id=%s", group.get("id"))
         return None
-    logger.debug("get_schedule_pdf_path: downloading for group_code=%s", group_code)
-    path = await download_schedule_pdf(group_code)
+    path = await get_cached_pdf_path(group_code)
     logger.debug("get_schedule_pdf_path: group_code=%s -> %s", group_code, path)
     return path
-
-
-async def _parse_pdf_async(pdf_path: str) -> dict:
-    """
-    Парсит PDF с расписанием в потоковом executor.
-
-    Алгоритм: запуск синхронного parse_pdf (camelot) в run_in_executor, чтобы не блокировать
-    asyncio event loop на время чтения и разбора PDF.
-
-    Args:
-        pdf_path: Путь к PDF-файлу на диске.
-
-    Returns:
-        Словарь расписания: ключи – дни недели (рус.), значения – списки занятий.
-
-    Raises:
-        Исключения, которые может выбросить parse_pdf (IOError, ошибки camelot).
-    """
-    logger.debug("_parse_pdf_async: start path=%s", pdf_path)
-    loop = asyncio.get_running_loop()
-    result = await loop.run_in_executor(None, parse_pdf, pdf_path)
-    logger.debug("_parse_pdf_async: done path=%s days=%s", pdf_path, len(result))
-    return result
 
 
 async def _send_schedule(bot: Bot, group: dict, message_text: str) -> None:
@@ -108,8 +85,8 @@ async def _send_schedule(bot: Bot, group: dict, message_text: str) -> None:
     sent = False
 
     # Попытка отправить с картинкой
-    if group.get("enable_image") and os.path.isdir(IMAGES_DIR):
-        images = [f for f in os.listdir(IMAGES_DIR) if not f.startswith(".")]
+    if group.get("enable_image") and await aiofiles.os.path.isdir(IMAGES_DIR):
+        images = [f for f in await aiofiles.os.listdir(IMAGES_DIR) if not f.startswith(".")]
         logger.debug("_send_schedule: images count=%s", len(images))
         if images:
             try:
@@ -160,10 +137,10 @@ async def _scheduler_tick(bot: Bot) -> None:
     Алгоритм:
     1. Очистка _sent_today от записей не за сегодня.
     2. Загрузка списка групп из БД.
-    3. Для каждой группы: если уже отправляли сегодня – skip; если час/минута не совпадают – skip;
-       если код группы пустой – помечаем как «отправлено» и skip; иначе качаем PDF (с кэшем по коду),
-       парсим, формируем сообщение; если «Выходной» – помечаем отправку и skip; иначе отправляем
-       и помечаем. Временные PDF из кэша удаляем.
+    3. Для каждой группы: если уже отправляли сегодня — skip; если час/минута не совпадают — skip;
+       если код группы пустой — помечаем как «отправлено» и skip; иначе получаем расписание
+       из кэша (get_cached_schedule, при промахе скачивает и парсит), формируем сообщение;
+       если «Выходной» — помечаем отправку и skip; иначе отправляем и помечаем.
 
     Args:
         bot: Экземпляр aiogram Bot.
@@ -180,9 +157,6 @@ async def _scheduler_tick(bot: Bot) -> None:
 
     groups = await get_all_groups()
     logger.debug("_scheduler_tick: now=%s:%s groups=%s", now.hour, now.minute, len(groups))
-
-    # Кэш скачанных PDF: group_code -> path (чтобы не качать один файл несколько раз)
-    pdf_cache: dict = {}
 
     for group in groups:
         group_id = group["id"]
@@ -203,29 +177,23 @@ async def _scheduler_tick(bot: Bot) -> None:
             _sent_today.add((group_id, today_str))
             continue
 
-        # Скачиваем PDF (или берём из кэша)
-        if group_code in pdf_cache:
-            pdf_path = pdf_cache[group_code]
-            logger.debug("_scheduler_tick: group id=%s using cached PDF", group_id)
-        else:
-            try:
-                pdf_path = await download_schedule_pdf(group_code)
-            except Exception:
-                logger.exception("Download failed for group_code=%s", group_code)
-                pdf_path = None
-            pdf_cache[group_code] = pdf_path
+        # Получаем расписание из кэша (скачивает и парсит при промахе)
+        try:
+            schedule = await get_cached_schedule(group_code)
+        except Exception:
+            logger.exception("Failed to get schedule for group %s", group["group_key"])
+            schedule = None
 
-        if not pdf_path:
-            logger.warning("Group %s: PDF not found for code '%s'", group["group_key"], group_code)
+        if not schedule:
+            logger.warning("Group %s: schedule not available for code '%s'", group["group_key"], group_code)
             continue
 
-        # Парсим расписание (в executor, не блокируя loop)
+        # Формируем сообщение
         try:
-            schedule = await _parse_pdf_async(pdf_path)
             today_schedule = get_today_schedule(schedule)
             message_text = create_message(today_schedule)
         except Exception:
-            logger.exception("Failed to parse schedule for group %s", group["group_key"])
+            logger.exception("Failed to build message for group %s", group["group_key"])
             continue
 
         if message_text == "Выходной":
@@ -240,15 +208,3 @@ async def _scheduler_tick(bot: Bot) -> None:
             _sent_today.add((group_id, today_str))
         except Exception:
             logger.exception("Failed to send schedule to chat %s", group["chat_id"])
-
-    # Чистим временные файлы из кэша
-    removed = 0
-    for path in pdf_cache.values():
-        if path and os.path.isfile(path) and "tmp" in path.lower():
-            try:
-                os.remove(path)
-                removed += 1
-            except OSError as e:
-                logger.debug("_scheduler_tick: failed to remove temp file %s: %s", path, e)
-    if removed:
-        logger.debug("_scheduler_tick: removed %s temp PDF(s)", removed)

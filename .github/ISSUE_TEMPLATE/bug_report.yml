@@ -1,0 +1,91 @@
+name: Сообщение об ошибке
+description: Сообщить о некорректном поведении бота
+title: "[Bug] "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Спасибо за сообщение об ошибке! Перед заполнением проверьте, нет ли
+        уже открытого issue с такой же проблемой.
+  - type: textarea
+    id: description
+    attributes:
+      label: Описание ошибки
+      description: Чётко и кратко опишите, что работает не так.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Шаги воспроизведения
+      description: Минимальная последовательность действий для повтора.
+      placeholder: |
+        1. Выполнить команду ...
+        2. ...
+        3. Наблюдаемая ошибка
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Ожидаемое поведение
+      description: Что должно было произойти.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Фактическое поведение
+      description: Что произошло на самом деле.
+    validations:
+      required: true
+  - type: input
+    id: group_code
+    attributes:
+      label: Код группы
+      description: Например, ИДБ-24-10.
+      placeholder: ИДБ-24-10
+    validations:
+      required: false
+  - type: dropdown
+    id: run_mode
+    attributes:
+      label: Способ запуска
+      options:
+        - Локально (python bot.py)
+        - Docker
+        - Другое
+    validations:
+      required: true
+  - type: input
+    id: python_version
+    attributes:
+      label: Версия Python
+      placeholder: "3.13"
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Операционная система
+      placeholder: "Windows 11 / Ubuntu 24.04 / macOS 15"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Логи
+      description: Вставьте релевантные строки из `logs/`. Уберите токены и секреты.
+      render: shell
+    validations:
+      required: false
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Подтверждения
+      options:
+        - label: Я искал среди существующих issues и не нашёл дубликат.
+          required: true
+        - label: В логах нет секретов и токенов.
+          required: true

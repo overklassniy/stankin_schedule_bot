@@ -1,0 +1,45 @@
+name: Предложение улучшения
+description: Предложить новую функциональность или улучшение
+title: "[Feature] "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Спасибо за идею! Опишите проблему, которую решает предложение, а не
+        только саму реализацию.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Какую проблему решает предложение
+      description: С чем вы столкнулись, что побудило к идее?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Предлагаемое решение
+      description: Как вы видите желаемое поведение или интерфейс.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Альтернативы
+      description: Какие другие варианты рассматривались и почему не подошли.
+    validations:
+      required: false
+  - type: textarea
+    id: additional
+    attributes:
+      label: Дополнительный контекст
+      description: Скриншоты, ссылки, примеры из других проектов.
+    validations:
+      required: false
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Подтверждения
+      options:
+        - label: Я искал среди существующих issues и не нашёл дубликат.
+          required: true

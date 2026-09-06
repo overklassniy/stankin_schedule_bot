@@ -1,0 +1,72 @@
+# Конфигурация Dependabot
+#
+# Документация:
+# https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+
+version: 2
+
+updates:
+  # Обновление Python-зависимостей из requirements.txt
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Moscow"
+    open-pull-requests-limit: 5
+    target-branch: "master"
+    labels:
+      - "dependencies"
+      - "python"
+    commit-message:
+      prefix: "Обновлено"
+      include: "scope"
+    groups:
+      aiogram:
+        patterns:
+          - "aiogram"
+      aio:
+        patterns:
+          - "aiohttp"
+          - "aiosqlite"
+          - "aiofiles"
+      pdf:
+        patterns:
+          - "camelot-py"
+          - "PyPDF2"
+          - "ghostscript"
+
+  # Обновление GitHub Actions в workflow-файлах
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Moscow"
+    open-pull-requests-limit: 5
+    target-branch: "master"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "Обновлено"
+      include: "scope"
+
+  # Обновление Docker-базового образа
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Moscow"
+    open-pull-requests-limit: 3
+    target-branch: "master"
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "Обновлено"
+      include: "scope"

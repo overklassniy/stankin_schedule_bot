@@ -37,5 +37,9 @@ ADMIN_IDS = [int(x) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip().
 MOODLE_BASE_URL = os.getenv("MOODLE_BASE_URL", "https://edu.stankin.ru")
 MOODLE_COURSE_ID = int(os.getenv("MOODLE_COURSE_ID", "11557"))
 
+# Кэш расписания: директория для хранения PDF и TTL в секундах (по умолчанию 6 часов)
+SCHEDULE_CACHE_DIR = os.getenv("SCHEDULE_CACHE_DIR", "data/cache")
+SCHEDULE_CACHE_TTL = int(os.getenv("SCHEDULE_CACHE_TTL", "21600"))
+
 # Прокси для запросов бота к Telegram API (.env: PROXY или HTTP_PROXY).
 PROXY = os.getenv("PROXY", "").strip() or os.getenv("HTTP_PROXY", "").strip() or None
